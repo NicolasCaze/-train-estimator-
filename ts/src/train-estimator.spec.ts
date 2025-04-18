@@ -37,5 +37,15 @@ describe("Test sur les fonctionnalitées de base", () => {
     await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Date is invalid"));
   });
 
+  it("retourne une erreur si l’API retourne -1", async () => {
+    (global.fetch as jest.Mock).mockImplementationOnce(() =>
+      Promise.resolve({
+        json: () => Promise.resolve({ price: -1 }),
+      })
+    );
+    const trip = new TripRequest(new TripDetails("Paris", "Lyon", futureDate()), [new Passenger(25, [])]);
+    await expect(estimator.estimate(trip)).rejects.toThrow(new ApiException());
+  });
+
   
 });
