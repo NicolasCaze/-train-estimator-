@@ -21,4 +21,10 @@ describe("Test sur les fonctionnalitées de base", () => {
     const result = await estimator.estimate(trip);
     expect(result).toBe(0);
   });
+  it("retourne une erreur si la ville de départ est vide", async () => {
+    const trip = new TripRequest(new TripDetails("", "Lyon", futureDate()), [new Passenger(25, [])]);
+    await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Start city is invalid"));
+  });
+
+  
 });
