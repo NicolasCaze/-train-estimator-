@@ -27,8 +27,15 @@ describe("Test sur les fonctionnalitées de base", () => {
   });
 
   it("retourne une erreur si la destination est vide", async () => {
-    const trip = new TripRequest(new TripDetails("Paris", "", futureDate()), [new Passenger(25, []),]);
+    const trip = new TripRequest(new TripDetails("Paris", "", futureDate()), [new Passenger(25, [])]);
     await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Destination city is invalid"));
   });
 
+  it("retourne une erreur si la date est est expiré", async () => {
+    const pastDate = new Date("2024-12-01");
+    const trip = new TripRequest(new TripDetails("Paris", "Lyon", pastDate), [new Passenger(25, [])]);
+    await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Date is invalid"));
+  });
+
+  
 });
