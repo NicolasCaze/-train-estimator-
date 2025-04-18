@@ -26,5 +26,9 @@ describe("Test sur les fonctionnalitées de base", () => {
     await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Start city is invalid"));
   });
 
-  
+  it("retourne une erreur si la destination est vide", async () => {
+    const trip = new TripRequest(new TripDetails("Paris", "", futureDate()), [new Passenger(25, []),]);
+    await expect(estimator.estimate(trip)).rejects.toThrow(new InvalidTripInputException("Destination city is invalid"));
+  });
+
 });
