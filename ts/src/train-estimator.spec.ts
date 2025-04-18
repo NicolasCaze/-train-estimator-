@@ -52,6 +52,14 @@ describe("Test sur les fonctionnalitées de base", () => {
     expect(result).toBe(0);
   });
 
+  it("retourne 9€ pour un enfant de 2 ans", async () => {
+    const trip = new TripRequest(new TripDetails("Paris", "Lyon", futureDate()), [
+      new Passenger(2, []),
+    ]);
+    const result = await estimator.estimate(trip);
+    expect(result).toBe(9);
+  });
+
   
   
 
