@@ -1,113 +1,140 @@
-import {ApiException, DiscountCard, InvalidTripInputException, TripRequest} from "./model/trip.request";
+import { ApiException, DiscountCard, InvalidTripInputException, TripRequest, Passenger } from "./model/trip.request";
+import { TrainPriceApi } from "./composant/fetch-train";
 
 export class TrainTicketEstimator {
-
     async estimate(trainDetails: TripRequest): Promise<number> {
-        if (trainDetails.passengers.length === 0) {
-            return 0;
-        }
+        this.validateTripDetails(trainDetails);
 
-        if (trainDetails.details.from.trim().length === 0) {
-            throw new InvalidTripInputException("Start city is invalid");
-        }
+        const basePrice = await TrainPriceApi.getBasePrice(
+            trainDetails.details.from,
+            trainDetails.details.to,
+            trainDetails.details.when
+        );
 
-        if (trainDetails.details.to.trim().length === 0) {
-            throw new InvalidTripInputException("Destination city is invalid");
-        }
+        const passengers = trainDetails.passengers;
 
-        if (trainDetails.details.when < new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate(), 0, 0, 0)) {
-            throw new InvalidTripInputException("Date is invalid");
-        }
-
-        // TODO USE THIS LINE AT THE END
-        const b = (await(await fetch(`https://sncftrenitaliadb.com/api/train/estimate/price?from=${trainDetails.details.from}&to=${trainDetails.details.to}&date=${trainDetails.details.when}`)).json())?.price || -1;
-
-        if (b === -1) {
+        if (basePrice === -1) {
             throw new ApiException();
         }
 
-        const pasngers = trainDetails.passengers;
-        let tot = 0;
-        let tmp = b;
-        for (let i=0;i<pasngers.length;i++) {
+        let totalPrice = 0;
 
-            if (pasngers[i].age < 0) {
-                throw new InvalidTripInputException("Age is invalid");
-            }
-            if (pasngers[i].age < 1) {
-                continue;
-            }
-            // Seniors
-            else if (pasngers[i].age <= 17) {
-            tmp = b* 0.6;
-            } else if(pasngers[i].age >= 70) {
-                tmp = b * 0.8;
-                if (pasngers[i].discounts.includes(DiscountCard.Senior)) {
-                    tmp -= b * 0.2;
-                }
-            } else {
-                tmp = b*1.2;
-            }
+        for (const passenger of passengers) {
+            this.validatePassenger(passenger);
 
-            const d = new Date();
-            if (trainDetails.details.when.getTime() >= d.setDate(d.getDate() +30)) {
-                tmp -= b * 0.2;
-            } else if (trainDetails.details.when.getTime() > d.setDate(d.getDate() -30 + 5)) {
-                const date1 = trainDetails.details.when;
-                const date2 = new Date();
-                //https://stackoverflow.com/questions/43735678/typescript-get-difference-between-two-dates-in-days
-                var diff = Math.abs(date1.getTime() - date2.getTime());
-                var diffDays = Math.ceil(diff / (1000 * 3600 * 24));
+            if (passenger.age < 1) continue;
 
-                tmp += (20 - diffDays) * 0.02 * b; // I tried. it works. I don't know why.
-            } else {
-                tmp += b;
-            }
+            let price = this.getBasePassengerPrice(passenger, basePrice);
+            price = this.applyDateAdjustments(trainDetails.details.when, price, basePrice);
+            price = this.applySpecialCases(passenger, price, basePrice);
 
-            if (pasngers[i].age > 0 && pasngers[i].age < 4) {
-                tmp = 9;
-            }
-
-            if (pasngers[i].discounts.includes(DiscountCard.TrainStroke)) {
-                tmp = 1;
-            }
-
-            tot += tmp;
-            tmp = b;
+            totalPrice += price;
         }
 
-        if (pasngers.length == 2) {
-            let cp = false;
-            let mn = false;
-            for (let i=0;i<pasngers.length;i++) {
-                if (pasngers[i].discounts.includes(DiscountCard.Couple)) {
-                    cp = true;
-                }
-                if (pasngers[i].age < 18) {
-                    mn = true;
-                }
+        return this.applyGroupDiscounts(passengers, totalPrice, basePrice);
+    }
+
+    private validateTripDetails(trip: TripRequest): void {
+        const { from, to, when } = trip.details;
+
+        if (!from.trim()) {
+            throw new InvalidTripInputException("Start city is invalid");
+        }
+
+        if (!to.trim()) {
+            throw new InvalidTripInputException("Destination city is invalid");
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (when < today) {
+            throw new InvalidTripInputException("Date is invalid");
+        }
+
+        if (trip.passengers.length === 0) {
+            return;
+        }
+    }
+
+    private validatePassenger(passenger: Passenger): void {
+        if (passenger.age < 0) {
+            throw new InvalidTripInputException("Age is invalid");
+        }
+    }
+
+    private getBasePassengerPrice(passenger: Passenger, basePrice: number): number {
+        if (passenger.age <= 17) {
+            return basePrice * 0.6;
+        }
+
+        if (passenger.age >= 70) {
+            let price = basePrice * 0.8;
+            if (passenger.discounts.includes(DiscountCard.Senior)) {
+                price -= basePrice * 0.2;
             }
-            if (cp && !mn) {
-                tot -= b * 0.2 * 2;
+            return price;
+        }
+
+        return basePrice * 1.2;
+    }
+
+    private applyDateAdjustments(tripDate: Date, price: number, basePrice: number): number {
+        const now = new Date();
+        const diffInMs = tripDate.getTime() - now.getTime();
+        const diffHours = diffInMs / (1000 * 60 * 60);
+        const diffDays = Math.ceil(diffInMs / (1000 * 3600 * 24));
+    
+        if (diffHours <= 6) {
+            return price - basePrice * 0.2;
+        }
+
+        if (diffDays < 5) {
+            return price + basePrice;
+        }
+    
+
+        if (diffDays >= 5 && diffDays < 30) {
+            return price + (20 - diffDays) * 0.02 * basePrice;
+        }
+    
+
+        if (diffDays >= 30) {
+            return price - basePrice * 0.2;
+        }
+    
+        return price;
+    }
+    
+
+    private applySpecialCases(passenger: Passenger, price: number, basePrice: number): number {
+        if (passenger.age < 4) {
+            return 9;
+        }
+
+        if (passenger.discounts.includes(DiscountCard.TrainStroke)) {
+            return 1;
+        }
+
+        return price;
+    }
+
+    private applyGroupDiscounts(passengers: Passenger[], total: number, basePrice: number): number {
+        const isMinorInGroup = passengers.some(p => p.age < 18);
+
+        if (passengers.length === 2) {
+            const hasCouple = passengers.some(p => p.discounts.includes(DiscountCard.Couple));
+            if (hasCouple && !isMinorInGroup) {
+                return total - basePrice * 0.2 * 2;
             }
         }
 
-        if (pasngers.length == 1) {
-            let cp = false;
-            let mn = false;
-            for (let i=0;i<pasngers.length;i++) {
-                if (pasngers[i].discounts.includes(DiscountCard.HalfCouple)) {
-                    cp = true;
-                }
-                if (pasngers[i].age < 18) {
-                    mn = true;
-                }
-            }
-            if (cp && !mn) {
-                tot -= b * 0.1;
+        if (passengers.length === 1) {
+            const p = passengers[0];
+            if (p.discounts.includes(DiscountCard.HalfCouple) && p.age >= 18) {
+                return total - basePrice * 0.1;
             }
         }
 
-        return tot;
+        return total;
     }
 }
