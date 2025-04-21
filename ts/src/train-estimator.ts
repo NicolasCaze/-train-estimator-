@@ -79,19 +79,32 @@ export class TrainTicketEstimator {
     }
 
     private applyDateAdjustments(tripDate: Date, price: number, basePrice: number): number {
-        const today = new Date();
-        const diffDays = Math.ceil((tripDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
-
-        if (diffDays >= 30) {
+        const now = new Date();
+        const diffInMs = tripDate.getTime() - now.getTime();
+        const diffHours = diffInMs / (1000 * 60 * 60);
+        const diffDays = Math.ceil(diffInMs / (1000 * 3600 * 24));
+    
+        if (diffHours <= 6) {
             return price - basePrice * 0.2;
         }
+
+        if (diffDays < 5) {
+            return price + basePrice;
+        }
+    
 
         if (diffDays >= 5 && diffDays < 30) {
             return price + (20 - diffDays) * 0.02 * basePrice;
         }
+    
 
-        return price + basePrice;
+        if (diffDays >= 30) {
+            return price - basePrice * 0.2;
+        }
+    
+        return price;
     }
+    
 
     private applySpecialCases(passenger: Passenger, price: number, basePrice: number): number {
         if (passenger.age < 4) {
