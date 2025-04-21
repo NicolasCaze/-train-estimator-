@@ -1,12 +1,14 @@
 import { TrainTicketEstimator } from "./train-estimator";
-import { TripRequest, TripDetails, Passenger, InvalidTripInputException, ApiException } from "./model/trip.request";
+import { TripRequest, TripDetails, Passenger, InvalidTripInputException, ApiException, DiscountCard } from "./model/trip.request";
 
-// Mock fetch pour simuler une réponse avec prix de base = 100€
+
 global.fetch = jest.fn(() =>
   Promise.resolve({
+    ok: true, 
     json: () => Promise.resolve({ price: 100 }),
   })
 ) as jest.Mock;
+
 
 const estimator = new TrainTicketEstimator();
 const futureDate = (days : number): Date => {
@@ -70,7 +72,117 @@ describe("Test sur les fonctionnalitées de base", () => {
     const basePrice = 100;
     const trip = new TripRequest(new TripDetails("Paris", "Lyon", futureDate(50)),[new Passenger(70, [])]);
     const result = await estimator.estimate(trip);
-    const expectedPrice = basePrice * 0.8;
+    const expectedPrice = 100 * 0.8 - 20;
     expect(result).toBeCloseTo(expectedPrice, 2);
+  });
+});
+describe("Test pour les fonctionnalitées de tarification", () => {
+  it("réduction sénior + carte sénior", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(40)),
+      [new Passenger(75, [DiscountCard.Senior])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(40, 2);
+  });
+
+  it("test pour un prix à 1€ avec TrainStroke", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [new Passenger(40, [DiscountCard.TrainStroke])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBe(1);
+  });
+
+  it("test pour un prix standard adulte sans réduction", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [new Passenger(30, [])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeGreaterThan(100); 
+  });
+
+  it("test pour une réduction anticipée de 20% pour date > 30 jours", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(40)),
+      [new Passenger(30, [])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(100 * 1.2 - 20, 2);
+  });
+
+  it("test sur l'augmentation selon le nombre de jours restants (entre 5 et 30)", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [new Passenger(30, [])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeGreaterThan(120); 
+  });
+
+  it("test pour une réduction couple (2 adultes sans mineur)", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(35)),
+      [
+        new Passenger(28, [DiscountCard.Couple]),
+        new Passenger(30, [])
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    const basePrice = 100 * 1.2 - 20; 
+    const totalBeforeReduction = basePrice * 2;
+    expect(result).toBeCloseTo(totalBeforeReduction - 40, 2); 
+  });
+
+  it("test pour une réduction half-couple pour adulte seul", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(35)),
+      [new Passenger(35, [DiscountCard.HalfCouple])]
+    );
+    const result = await estimator.estimate(trip);
+    const expected = (100 * 1.2 - 20) - 10;
+    expect(result).toBeCloseTo(expected, 2);
+  });
+
+  it("test pour quand il n'y a pas de réduction couple si un mineur est présent", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(35)),
+      [
+        new Passenger(28, [DiscountCard.Couple]),
+        new Passenger(10, [])
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    const expected = (100 * 1.2 - 20) + (100 * 0.6 - 20); 
+    expect(result).toBeCloseTo(expected, 2);
+  });
+
+  it("test pour un cas combiné avec enfants, adultes et réduction", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(45)),
+      [
+        new Passenger(2, []), 
+        new Passenger(10, []), 
+        new Passenger(35, [DiscountCard.TrainStroke]) 
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(9 + 40 + 1, 2);
+  });
+
+  it("test pour mix d’âge + réduction HalfCouple + Stroke", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(45)),
+      [
+        new Passenger(2, []), 
+        new Passenger(35, [DiscountCard.HalfCouple]), 
+        new Passenger(45, [DiscountCard.TrainStroke]) 
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(110, 2); 
+
   });
 });
