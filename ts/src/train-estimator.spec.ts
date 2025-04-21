@@ -197,5 +197,64 @@ describe("Test pour les fonctionnalitées de tarification", () => {
     const result = await estimator.estimate(trip);
     expect(result).toBeCloseTo(100 * 1.2 - 20, 2); 
   });
+
+  it("test pour une réduction de 30% à toute la famille avec la carte Famille", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [
+        new Passenger(40, [DiscountCard.Family], "Dupont"),
+        new Passenger(12, [], "Dupont"),
+        new Passenger(45, [], "Durand") 
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(280, 2);
+  });
+
+  it("retourne une erreur si la carte Famille est présente mais pas de nom de famille", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [
+        new Passenger(40, [DiscountCard.Family]) 
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeGreaterThan(100); 
+  });
+
+  it("retourne une erreur si le nom de famille n'est partagé avec personne", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [
+        new Passenger(40, [DiscountCard.Family], "Dupont"),
+        new Passenger(30, [], "Durand")
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeGreaterThan(100 * 1.2); 
+  });
+
+  it("n'applique pas la réduction Famille si un seul passager possède le nom", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [new Passenger(40, [DiscountCard.Family], "Dupont")]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeGreaterThan(100); 
+  });
+
+  it("retourne une erreur si ne cumule pas réduction Famille avec TrainStroke (priorité Famille)", async () => {
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", futureDate(10)),
+      [
+        new Passenger(40, [DiscountCard.Family, DiscountCard.TrainStroke], "Dupont"),
+        new Passenger(35, [], "Dupont")
+      ]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(140, 2); 
+  });
+
+  
   
 });
