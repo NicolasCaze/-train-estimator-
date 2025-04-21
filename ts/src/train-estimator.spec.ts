@@ -185,4 +185,17 @@ describe("Test pour les fonctionnalitées de tarification", () => {
     expect(result).toBeCloseTo(110, 2); 
 
   });
+
+  it("test pour une réduction de 20% si le départ est dans moins de 6h", async () => {
+    const sixHoursLater = new Date();
+    sixHoursLater.setHours(sixHoursLater.getHours() + 5);
+  
+    const trip = new TripRequest(
+      new TripDetails("Paris", "Lyon", sixHoursLater),
+      [new Passenger(35, [])]
+    );
+    const result = await estimator.estimate(trip);
+    expect(result).toBeCloseTo(100 * 1.2 - 20, 2); 
+  });
+  
 });
