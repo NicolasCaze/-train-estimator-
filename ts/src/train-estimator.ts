@@ -19,8 +19,15 @@ export class TrainTicketEstimator {
 
         let totalPrice = 0;
 
+        const familyDiscountLastNames = this.getFamilyDiscountLastNames(passengers);
+
         for (const passenger of passengers) {
             this.validatePassenger(passenger);
+
+            if (passenger.lastName && familyDiscountLastNames.has(passenger.lastName)) {
+                totalPrice += basePrice * 0.7;
+                continue;
+            }
 
             if (passenger.age < 1) continue;
 
@@ -83,7 +90,7 @@ export class TrainTicketEstimator {
         const diffInMs = tripDate.getTime() - now.getTime();
         const diffHours = diffInMs / (1000 * 60 * 60);
         const diffDays = Math.ceil(diffInMs / (1000 * 3600 * 24));
-    
+
         if (diffHours <= 6) {
             return price - basePrice * 0.2;
         }
@@ -91,20 +98,17 @@ export class TrainTicketEstimator {
         if (diffDays < 5) {
             return price + basePrice;
         }
-    
 
         if (diffDays >= 5 && diffDays < 30) {
             return price + (20 - diffDays) * 0.02 * basePrice;
         }
-    
 
         if (diffDays >= 30) {
             return price - basePrice * 0.2;
         }
-    
+
         return price;
     }
-    
 
     private applySpecialCases(passenger: Passenger, price: number, basePrice: number): number {
         if (passenger.age < 4) {
@@ -136,5 +140,23 @@ export class TrainTicketEstimator {
         }
 
         return total;
+    }
+
+
+    private getFamilyDiscountLastNames(passengers: Passenger[]): Set<string> {
+        const familyNames = new Set<string>();
+
+        for (const p of passengers) {
+            if (p.lastName && p.discounts.includes(DiscountCard.Family)) {
+                const matching = passengers.filter(
+                    other => other.lastName === p.lastName
+                );
+                if (matching.length > 1) {
+                    familyNames.add(p.lastName);
+                }
+            }
+        }
+
+        return familyNames;
     }
 }
