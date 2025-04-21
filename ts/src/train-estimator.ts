@@ -22,6 +22,12 @@ export class TrainTicketEstimator {
         for (const passenger of passengers) {
             this.validatePassenger(passenger);
 
+        if (this.isFamilyReductionApplicable(passenger, passengers)) {
+            totalPrice += basePrice * 0.7;
+        continue; 
+  }
+  
+
             if (passenger.age < 1) continue;
 
             let price = this.getBasePassengerPrice(passenger, basePrice);
@@ -137,4 +143,15 @@ export class TrainTicketEstimator {
 
         return total;
     }
+
+    private isFamilyReductionApplicable(passenger: Passenger, allPassengers: Passenger[]): boolean {
+        if (!passenger.lastName || !passenger.discounts.includes(DiscountCard.Family)) {
+          return false;
+        }
+        
+        return allPassengers.some(
+          p => p !== passenger && p.lastName === passenger.lastName
+        );
+      }
+      
 }
